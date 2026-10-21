@@ -1,0 +1,460 @@
+// ============================================================================
+// Farhang School - Prisma schema (MySQL)
+//
+// This file is the "blueprint" of the database. Prisma reads it and creates
+// the real MySQL tables for us (that is what a "migration" does).
+// Model names are PascalCase in code; table names in MySQL are snake_case
+// (see @@map) so they look familiar in phpMyAdmin.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Enums (fixed lists of allowed values)
+// ----------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum NewsStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum EnrollmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum Weekday {
+  SATURDAY
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+}
+
+enum ExamType {
+  QUIZ
+  MIDTERM
+  FINAL
+  CLASSWORK
+}
+
+// ============================================================================
+// PART A - Accounts and people (foundation of the future panels)
+// ============================================================================
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique @db.VarChar(191)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  role         Role
+  firstName    String   @map("first_name") @db.VarChar(100)
+  lastName     String   @map("last_name") @db.VarChar(100)
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  student Student?
+  parent  Parent?
+  teacher Teacher?
+
+  @@index([role])
+  @@map("users")
+}
+
+model Teacher {
+  id              Int      @id @default(autoincrement())
+  userId          Int?     @unique @map("user_id")
+  firstName       String   @map("first_name") @db.VarChar(100)
+  lastName        String   @map("last_name") @db.VarChar(100)
+  position        String   @db.VarChar(150) // e.g. "معلم پایه ششم"
+  subject         String   @db.VarChar(150) // e.g. "ریاضی"
+  degree          String   @db.VarChar(150) // e.g. "کارشناسی ارشد ریاضی"
+  experienceYears Int      @default(0) @map("experience_years")
+  bio             String?  @db.Text
+  imageUrl        String?  @map("image_url") @db.VarChar(500)
+  sortOrder       Int      @default(0) @map("sort_order")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user             User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  homeroomClasses  SchoolClass[]
+  classSubjects    ClassSubject[]
+  grades           Grade[]
+  homeworks        Homework[]
+
+  @@index([isActive, sortOrder])
+  @@map("teachers")
+}
+
+model Student {
+  id           Int      @id @default(autoincrement())
+  userId       Int?     @unique @map("user_id")
+  firstName    String   @map("first_name") @db.VarChar(100)
+  lastName     String   @map("last_name") @db.VarChar(100)
+  nationalCode String   @unique @map("national_code") @db.VarChar(10)
+  birthDate    DateTime @map("birth_date") @db.Date
+  gradeLevel   Int      @map("grade_level") // 1 to 6
+  fatherName   String   @map("father_name") @db.VarChar(100)
+  classId      Int?     @map("class_id")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user       User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  class      SchoolClass?    @relation(fields: [classId], references: [id], onDelete: SetNull)
+  parents    ParentStudent[]
+  grades     Grade[]
+  attendance Attendance[]
+
+  @@index([classId])
+  @@index([gradeLevel])
+  @@map("students")
+}
+
+model Parent {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @unique @map("user_id")
+  firstName String   @map("first_name") @db.VarChar(100)
+  lastName  String   @map("last_name") @db.VarChar(100)
+  phone     String   @db.VarChar(15)
+  address   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  children ParentStudent[]
+
+  @@map("parents")
+}
+
+// Many-to-many link: one parent can have several children,
+// and one child can have two parents.
+model ParentStudent {
+  parentId     Int    @map("parent_id")
+  studentId    Int    @map("student_id")
+  relationship String @default("PARENT") @db.VarChar(30) // FATHER / MOTHER / GUARDIAN
+
+  parent  Parent  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([parentId, studentId])
+  @@index([studentId])
+  @@map("parent_students")
+}
+
+// ============================================================================
+// PART B - Academic structure (classes, subjects, grades, attendance, homework)
+// ============================================================================
+
+model SchoolClass {
+  id                Int      @id @default(autoincrement())
+  name              String   @db.VarChar(100) // e.g. "ششم الف"
+  gradeLevel        Int      @map("grade_level")
+  academicYear      String   @map("academic_year") @db.VarChar(20) // e.g. "1405-1406"
+  homeroomTeacherId Int?     @map("homeroom_teacher_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  homeroomTeacher Teacher?       @relation(fields: [homeroomTeacherId], references: [id], onDelete: SetNull)
+  students        Student[]
+  classSubjects   ClassSubject[]
+  homeworks       Homework[]
+
+  @@unique([name, academicYear])
+  @@index([gradeLevel])
+  @@map("classes")
+}
+
+model Subject {
+  id         Int      @id @default(autoincrement())
+  title      String   @db.VarChar(100)
+  gradeLevel Int?     @map("grade_level") // null = used in all grades
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  classSubjects ClassSubject[]
+  grades        Grade[]
+  homeworks     Homework[]
+
+  @@map("subjects")
+}
+
+// Weekly timetable: "class X has subject Y with teacher Z on day D at time T"
+model ClassSubject {
+  id        Int      @id @default(autoincrement())
+  classId   Int      @map("class_id")
+  subjectId Int      @map("subject_id")
+  teacherId Int?     @map("teacher_id")
+  weekday   Weekday?
+  startTime String?  @map("start_time") @db.VarChar(5) // "08:00"
+  endTime   String?  @map("end_time") @db.VarChar(5)
+
+  class   SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher Teacher?    @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+
+  @@index([classId])
+  @@index([subjectId])
+  @@index([teacherId])
+  @@map("class_subjects")
+}
+
+model Grade {
+  id           Int      @id @default(autoincrement())
+  studentId    Int      @map("student_id")
+  subjectId    Int      @map("subject_id")
+  term         Int      @default(1) // 1 or 2
+  examType     ExamType @default(QUIZ) @map("exam_type")
+  score        Decimal  @db.Decimal(5, 2) // e.g. 19.50
+  recordedById Int?     @map("recorded_by_id") // teacher who entered it
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  student    Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject    Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  recordedBy Teacher? @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([studentId, term])
+  @@index([subjectId])
+  @@index([recordedById])
+  @@map("grades")
+}
+
+model Attendance {
+  id        Int              @id @default(autoincrement())
+  studentId Int              @map("student_id")
+  date      DateTime         @db.Date
+  status    AttendanceStatus @default(PRESENT)
+  note      String?          @db.VarChar(255)
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, date]) // one record per student per day
+  @@index([date])
+  @@map("attendance")
+}
+
+model Homework {
+  id          Int      @id @default(autoincrement())
+  classId     Int      @map("class_id")
+  subjectId   Int      @map("subject_id")
+  teacherId   Int?     @map("teacher_id")
+  title       String   @db.VarChar(200)
+  description String?  @db.Text
+  dueDate     DateTime @map("due_date")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  class   SchoolClass @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher Teacher?    @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+
+  @@index([classId, dueDate])
+  @@index([subjectId])
+  @@index([teacherId])
+  @@map("homeworks")
+}
+
+// ============================================================================
+// PART C - Public website content (everything the site shows comes from here)
+// ============================================================================
+
+// A single row with the general information of the school.
+model SchoolInfo {
+  id            Int      @id @default(autoincrement())
+  name          String   @db.VarChar(150)
+  slogan        String   @db.VarChar(255)
+  shortIntro    String   @map("short_intro") @db.Text
+  about         String   @db.Text
+  philosophy    String   @db.Text
+  address       String   @db.VarChar(500)
+  phone         String   @db.VarChar(50)
+  email         String   @db.VarChar(191)
+  workingHours  String   @map("working_hours") @db.VarChar(255)
+  latitude      Float?
+  longitude     Float?
+  heroImageUrl  String?  @map("hero_image_url") @db.VarChar(500)
+  aboutImageUrl String?  @map("about_image_url") @db.VarChar(500)
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("school_info")
+}
+
+model SchoolStatistic {
+  id        Int    @id @default(autoincrement())
+  label     String @db.VarChar(100) // e.g. "دانش‌آموز"
+  value     Int
+  suffix    String? @db.VarChar(10) // e.g. "+"
+  icon      String? @db.VarChar(50)
+  sortOrder Int    @default(0) @map("sort_order")
+
+  @@index([sortOrder])
+  @@map("school_statistics")
+}
+
+model Facility {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(150)
+  description String   @db.Text
+  icon        String?  @db.VarChar(50)
+  imageUrl    String?  @map("image_url") @db.VarChar(500)
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive, sortOrder])
+  @@map("facilities")
+}
+
+model NewsCategory {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(100)
+  slug String @unique @db.VarChar(120)
+
+  news News[]
+
+  @@map("news_categories")
+}
+
+model News {
+  id          Int        @id @default(autoincrement())
+  title       String     @db.VarChar(255)
+  slug        String     @unique @db.VarChar(191)
+  summary     String     @db.VarChar(500)
+  content     String     @db.Text
+  imageUrl    String?    @map("image_url") @db.VarChar(500)
+  author      String     @db.VarChar(150)
+  categoryId  Int        @map("category_id")
+  status      NewsStatus @default(DRAFT)
+  publishedAt DateTime?  @map("published_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  category NewsCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
+  @@map("news")
+}
+
+model EventCategory {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(100)
+  slug String @unique @db.VarChar(120)
+
+  events Event[]
+
+  @@map("event_categories")
+}
+
+model Event {
+  id          Int      @id @default(autoincrement())
+  title       String   @db.VarChar(255)
+  description String   @db.Text
+  imageUrl    String?  @map("image_url") @db.VarChar(500)
+  eventDate   DateTime @map("event_date") @db.Date
+  startTime   String   @map("start_time") @db.VarChar(5) // "09:00"
+  location    String   @db.VarChar(200)
+  categoryId  Int      @map("category_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category EventCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([eventDate])
+  @@index([categoryId])
+  @@map("events")
+}
+
+model GalleryCategory {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(100)
+  slug String @unique @db.VarChar(120)
+
+  images GalleryImage[]
+
+  @@map("gallery_categories")
+}
+
+model GalleryImage {
+  id          Int       @id @default(autoincrement())
+  title       String    @db.VarChar(200)
+  description String?   @db.VarChar(500)
+  imageUrl    String    @map("image_url") @db.VarChar(500)
+  takenAt     DateTime? @map("taken_at") @db.Date
+  categoryId  Int       @map("category_id")
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  category GalleryCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
+  @@index([takenAt])
+  @@map("gallery_images")
+}
+
+// ============================================================================
+// PART D - Forms sent by visitors
+// ============================================================================
+
+model Enrollment {
+  id                Int              @id @default(autoincrement())
+  firstName         String           @map("first_name") @db.VarChar(100)
+  lastName          String           @map("last_name") @db.VarChar(100)
+  nationalCode      String           @unique @map("national_code") @db.VarChar(10)
+  birthDate         DateTime         @map("birth_date") @db.Date
+  gradeLevel        Int              @map("grade_level") // 1 to 6
+  fatherName        String           @map("father_name") @db.VarChar(100)
+  parentPhone       String           @map("parent_phone") @db.VarChar(15)
+  address           String           @db.Text
+  previousEducation String?          @map("previous_education") @db.Text
+  notes             String?          @db.Text
+  documents         Json? // list of uploaded document names/URLs (future upload)
+  status            EnrollmentStatus @default(PENDING)
+  adminNote         String?          @map("admin_note") @db.Text
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("enrollments")
+}
+
+model ContactMessage {
+  id        Int      @id @default(autoincrement())
+  name      String   @db.VarChar(150)
+  email     String   @db.VarChar(191)
+  phone     String?  @db.VarChar(15)
+  subject   String   @db.VarChar(200)
+  message   String   @db.Text
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([isRead, createdAt])
+  @@map("contact_messages")
+}
