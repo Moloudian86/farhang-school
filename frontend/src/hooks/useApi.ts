@@ -1,5 +1,5 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { api } from "../lib/api";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { api, apiPost } from "../lib/api";
 import { Category, EventItem, Facility, GalleryImage, NewsDetail, NewsItem, SchoolInfo, Statistic, Teacher } from "../types";
 
 const data = <T,>(p: Promise<{ data: T }>) => p.then((r) => r.data);
@@ -43,3 +43,13 @@ export const useEventsList = (p: { page: number; upcoming: boolean }) =>
 export const useGallery = (category: string) =>
   useQuery({ queryKey: ["gallery", category], queryFn: () => data(api<GalleryImage[]>(`/gallery${qs({ limit: 50, category })}`)) });
 export const useGalleryCategories = () => useQuery({ queryKey: ["gallery", "categories"], queryFn: () => data(api<Category[]>("/gallery/categories")) });
+
+// ---- Public forms (POST) ----
+export interface ContactPayload { name: string; email: string; phone?: string; subject: string; message: string; website?: string }
+export interface EnrollmentPayload {
+  firstName: string; lastName: string; nationalCode: string; birthDate: string; gradeLevel: number; fatherName: string;
+  parentPhone: string; address: string; previousEducation?: string; notes?: string; website?: string;
+}
+
+export const useSendContact = () => useMutation({ mutationFn: (body: ContactPayload) => apiPost<{ id: number }>("/contact", body) });
+export const useSendEnrollment = () => useMutation({ mutationFn: (body: EnrollmentPayload) => apiPost<{ id: number }>("/enrollments", body) });

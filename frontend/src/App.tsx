@@ -2,6 +2,8 @@ import { Route, Routes } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import About from "./pages/About";
 import ComingSoon from "./pages/ComingSoon";
+import Contact from "./pages/Contact";
+import Enrollment from "./pages/Enrollment";
 import Events from "./pages/Events";
 import Facilities from "./pages/Facilities";
 import Gallery from "./pages/Gallery";
@@ -10,7 +12,7 @@ import News from "./pages/News";
 import NewsDetail from "./pages/NewsDetail";
 import Staff from "./pages/Staff";
 
-// Enrollment, contact and login pages come in the next step; for now they show "ComingSoon".
+// Login and the user panels come in the next step; unknown addresses show "ComingSoon".
 export default function App() {
   return (
     <Routes>
@@ -23,6 +25,8 @@ export default function App() {
         <Route path="news/:slug" element={<NewsDetail />} />
         <Route path="events" element={<Events />} />
         <Route path="gallery" element={<Gallery />} />
+        <Route path="contact" element={<Contact />} />
+        <Route path="enrollment" element={<Enrollment />} />
         <Route path="*" element={<ComingSoon />} />
       </Route>
     </Routes>

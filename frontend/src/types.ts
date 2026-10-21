@@ -2,7 +2,7 @@
 export interface PageMeta { page: number; limit: number; total: number; totalPages: number }
 export interface SchoolInfo {
   name: string; slogan: string; shortIntro: string; about: string; philosophy: string; address: string;
-  phone: string; email: string; workingHours: string; heroImageUrl: string | null; aboutImageUrl: string | null;
+  phone: string; email: string; workingHours: string; latitude: number | null; longitude: number | null; heroImageUrl: string | null; aboutImageUrl: string | null;
 }
 export interface Statistic { id: number; label: string; value: number; suffix: string | null }
 export interface Category { id: number; name: string; slug: string }
