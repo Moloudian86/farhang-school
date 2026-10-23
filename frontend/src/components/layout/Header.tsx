@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
+import { useAuth } from "../../auth/AuthContext";
 import { Logo } from "../Logo";
 
 export const NAV_LINKS = [
@@ -20,6 +21,8 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
 
 export default function Header() {
   const [open, setOpen] = useState(false);
+  const { user } = useAuth();
+  const accountLink = user ? { to: "/panel", label: "پنل من" } : { to: "/login", label: "ورود" };
 
   return (
     <header className="sticky top-0 z-30 border-b border-primary/10 bg-white/95 backdrop-blur">
@@ -33,6 +36,9 @@ export default function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Link to={accountLink.to} className="hidden rounded-xl px-4 py-2 text-sm font-bold text-primary ring-1 ring-primary/30 transition hover:bg-primary/10 sm:inline-block">
+            {accountLink.label}
+          </Link>
           <Link to="/enrollment" className="rounded-xl bg-accent px-4 py-2 text-sm font-bold text-ink transition hover:bg-accent/85">
             ثبت‌نام
           </Link>
@@ -58,6 +64,7 @@ export default function Header() {
                 {l.label}
               </NavLink>
             ))}
+            <NavLink to={accountLink.to} className={linkClass} onClick={() => setOpen(false)}>{accountLink.label}</NavLink>
           </div>
         </nav>
       )}

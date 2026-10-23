@@ -9,6 +9,7 @@ import { newsRouter } from "./modules/news/news.routes";
 import { schoolInfoRouter } from "./modules/school-info/schoolInfo.routes";
 import { statisticsRouter } from "./modules/statistics/statistics.routes";
 import { teachersRouter } from "./modules/teachers/teachers.routes";
+import { panelRouter } from "./modules/panel/panel.routes";
 import { uploadsRouter } from "./modules/uploads/uploads.routes";
 
 /** The table of contents of the API. Every URL below starts with /api/v1 */
@@ -25,3 +26,6 @@ apiRouter.use("/gallery", galleryRouter);
 apiRouter.use("/enrollments", enrollmentsRouter);
 apiRouter.use("/contact", contactRouter);
 apiRouter.use("/uploads", uploadsRouter);
+
+// Private areas for logged-in users (admin, teacher, student, parent): /api/v1/panel/...
+apiRouter.use("/panel", panelRouter);

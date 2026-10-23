@@ -58,3 +58,15 @@ export const currentJalaliYear = () => {
 
 /** "2018-05-10" for the backend. */
 export const toIsoDate = (g: [number, number, number]) => `${g[0]}-${String(g[1]).padStart(2, "0")}-${String(g[2]).padStart(2, "0")}`;
+
+/** Today's date (in the user's own time zone) as "2026-10-21". */
+export const todayIso = () => {
+  const n = new Date();
+  return toIsoDate([n.getFullYear(), n.getMonth() + 1, n.getDate()]);
+};
+
+/** "2026-10-21" -> [jy, jm, jd] */
+export const isoToJalali = (iso: string): [number, number, number] => {
+  const [y, m, d] = iso.split("-").map(Number);
+  return gregorianToJalali(y, m, d);
+};

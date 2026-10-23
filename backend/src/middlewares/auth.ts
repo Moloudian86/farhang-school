@@ -62,3 +62,7 @@ export const authorize =
 
 /** Shortcut used by every admin route. */
 export const adminOnly = [authenticate, authorize(Role.ADMIN)];
+
+export const teacherOnly = [authenticate, authorize(Role.TEACHER)];
+export const studentOnly = [authenticate, authorize(Role.STUDENT)];
+export const parentOnly = [authenticate, authorize(Role.PARENT)];

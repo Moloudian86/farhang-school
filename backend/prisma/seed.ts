@@ -9,6 +9,7 @@
  */
 import { PrismaClient, NewsStatus, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { seedAcademic } from "./seedAcademic";
 
 const prisma = new PrismaClient();
 
@@ -579,6 +580,7 @@ async function main() {
   await seedEvents();
   await seedGallery();
   await seedUsers();
+  await seedAcademic(prisma, log);
   console.log("Done.");
 }
 
