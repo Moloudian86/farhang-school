@@ -22,8 +22,8 @@ Source of truth: `backend/prisma/schema.prisma`. Tables are created by Prisma Mi
 ## School system (foundation for Admin / Teacher / Student / Parent panels)
 | Table | Purpose |
 |---|---|
-| `users` | Login accounts, role = ADMIN / TEACHER / STUDENT / PARENT, hashed password |
-| `students`, `parents`, `parent_students` | People; parent <-> student is many-to-many |
+| `users` | Login accounts, role = ADMIN / TEACHER / STUDENT / PARENT, hashed password. **No e-mail.** `phone` (unique) is the login name of ADMIN / TEACHER / PARENT; a STUDENT's user has no phone |
+| `students`, `parents`, `parent_students` | People; parent <-> student is many-to-many (a student can have father and mother, each with an own account). `students.student_code` (unique) is the student's login name; `parents.phone` is unique |
 | `classes`, `subjects`, `class_subjects` | Classes, subjects, weekly timetable with teacher |
 | `grades`, `attendance`, `homeworks` | Scores, daily attendance (unique per student per day), homework |
 
@@ -36,3 +36,15 @@ Source of truth: `backend/prisma/schema.prisma`. Tables are created by Prisma Mi
 ## Images
 Only the URL is stored (`image_url`). Demo data will use Unsplash URLs; later an upload endpoint
 saves files in `backend/uploads` and stores `/uploads/...` in the same column, so nothing else changes.
+
+## Login and student code
+| Role | Logs in with |
+|---|---|
+| ADMIN / TEACHER / PARENT | `users.phone` (09xxxxxxxxx) + password |
+| STUDENT | `students.student_code` + password |
+
+Student code = `<entry year>-<entry grade>-<sequence>`, e.g. `1405-1-001`.
+- `entry_year`, `entry_grade`, `entry_sequence` are stored in `students`; `student_code` is built from them by the **backend only**.
+- The code is permanent. `entry_grade` is the grade when the student entered the school; the CURRENT grade is `students.grade_level` / `students.class_id`.
+- The sequence counts inside (`entry_year` + `entry_grade`); unique indexes: `student_code` and (`entry_year`, `entry_grade`, `entry_sequence`).
+- Code to build the next one: `backend/src/utils/studentCode.ts` (`allocateStudentCode`).

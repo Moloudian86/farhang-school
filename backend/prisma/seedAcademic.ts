@@ -5,6 +5,8 @@
  */
 import { AttendanceStatus, ExamType, PrismaClient, Role, Subject, Student, Weekday } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { allocateStudentCode } from "../src/utils/studentCode";
+import { DEMO, DEMO_ENTRY } from "./demoAccounts";
 
 const DAY = 24 * 60 * 60 * 1000;
 const dayOffset = (n: number) => {
@@ -37,12 +39,20 @@ const STUDENTS: [string, string, string][] = [
   ["امیرعلی", "نوری", "علی"], ["مهیار", "صادقی", "کاظم"], ["پویا", "اکبری", "بهرام"], ["ایلیا", "موسوی", "سعید"],
 ];
 
-async function ensureUser(prisma: PrismaClient, email: string, password: string, role: Role, firstName: string, lastName: string) {
-  const found = await prisma.user.findUnique({ where: { email } });
+/** A phone-login user (ADMIN / TEACHER / PARENT): found by phone, created if missing. */
+async function ensurePhoneUser(prisma: PrismaClient, phone: string, password: string, role: Role, firstName: string, lastName: string) {
+  const found = await prisma.user.findUnique({ where: { phone } });
   if (found) return found;
-  return prisma.user.create({
-    data: { email, passwordHash: await bcrypt.hash(password, 10), role, firstName, lastName },
+  return prisma.user.create({ data: { phone, passwordHash: await bcrypt.hash(password, 10), role, firstName, lastName } });
+}
+
+/** A student's user has NO phone: the student logs in with Student.studentCode. Does nothing if the student already has a user. */
+async function ensureStudentUser(prisma: PrismaClient, student: Student, password: string) {
+  if (student.userId) return;
+  const user = await prisma.user.create({
+    data: { passwordHash: await bcrypt.hash(password, 10), role: Role.STUDENT, firstName: student.firstName, lastName: student.lastName },
   });
+  await prisma.student.update({ where: { id: student.id }, data: { userId: user.id } });
 }
 
 export async function seedAcademic(prisma: PrismaClient, log: (ok: boolean, text: string) => void) {
@@ -79,32 +89,44 @@ export async function seedAcademic(prisma: PrismaClient, log: (ok: boolean, text
   await prisma.classSubject.createMany({ data: timetable });
   log(true, `timetable (${timetable.length} lessons)`);
 
-  // Students (the first one gets the demo login)
-  const studentUser = await ensureUser(prisma, "student@farhang.school", "Student@12345", Role.STUDENT, STUDENTS[0][0], STUDENTS[0][1]);
+  // Students. Every student gets a permanent code "<entry year>-<entry grade>-<sequence>", e.g. 1405-6-001.
+  // The first student also gets the demo login (student code + password; students have no phone or e-mail).
   const students: Student[] = [];
   for (let i = 0; i < STUDENTS.length; i++) {
     const [firstName, lastName, fatherName] = STUDENTS[i];
-    students.push(
-      await prisma.student.create({
+    const code = nationalCode(`00${(1234500 + i * 37).toString()}`.slice(-9));
+
+    let student = await prisma.student.findUnique({ where: { nationalCode: code } });
+    if (!student) {
+      student = await prisma.student.create({
         data: {
-          userId: i === 0 ? studentUser.id : null,
           firstName, lastName, fatherName,
-          nationalCode: nationalCode(`00${(1234500 + i * 37).toString()}`.slice(-9)),
+          nationalCode: code,
           birthDate: new Date(Date.UTC(2014, i % 12, 5 + i)),
           gradeLevel: 6,
           classId: cls.id,
+          ...(await allocateStudentCode(prisma, DEMO_ENTRY.year, DEMO_ENTRY.grade)),
         },
-      })
-    );
+      });
+    }
+    if (i === 0) await ensureStudentUser(prisma, student, DEMO.student.password);
+    students.push(student);
   }
-  log(true, `students (${students.length})`);
+  log(true, `students (${students.length}), demo login code: ${students[0].studentCode}`);
 
-  // Demo parent of the first student
-  const parentUser = await ensureUser(prisma, "parent@farhang.school", "Parent@12345", Role.PARENT, "حسن", "رضایی");
-  const parent = await prisma.parent.create({
-    data: { userId: parentUser.id, firstName: "حسن", lastName: "رضایی", phone: "09121234567", address: "اصفهان، خیابان چهارباغ بالا" },
+  // Demo parent of the first student (phone + password)
+  const parentUser = await ensurePhoneUser(prisma, DEMO.parent.phone, DEMO.parent.password, Role.PARENT, "حسن", "رضایی");
+  const parent =
+    (await prisma.parent.findUnique({ where: { phone: DEMO.parent.phone } })) ??
+    (await prisma.parent.create({
+      data: { userId: parentUser.id, firstName: "حسن", lastName: "رضایی", phone: DEMO.parent.phone, address: "اصفهان، خیابان چهارباغ بالا" },
+    }));
+  if (!parent.userId) await prisma.parent.update({ where: { id: parent.id }, data: { userId: parentUser.id } });
+  await prisma.parentStudent.upsert({
+    where: { parentId_studentId: { parentId: parent.id, studentId: students[0].id } },
+    update: {},
+    create: { parentId: parent.id, studentId: students[0].id, relationship: "FATHER" },
   });
-  await prisma.parentStudent.create({ data: { parentId: parent.id, studentId: students[0].id, relationship: "FATHER" } });
   log(true, "parent account linked to the first student");
 
   // Grades (term 1: a quiz and a classwork score per subject, one score per type)

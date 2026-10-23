@@ -9,6 +9,7 @@
  */
 import { PrismaClient, NewsStatus, Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { DEMO } from "./demoAccounts";
 import { seedAcademic } from "./seedAcademic";
 
 const prisma = new PrismaClient();
@@ -532,39 +533,51 @@ async function seedGallery() {
 }
 
 // ---------------------------------------------------------------------------
-// 7) Demo accounts (used in the next steps for login)
+// 7) Demo accounts (ADMIN and TEACHER log in with phone + password)
 // ---------------------------------------------------------------------------
 
 async function seedUsers() {
   const demo = [
-    { email: "admin@farhang.school", password: "Admin@12345", role: Role.ADMIN, firstName: "مدیر", lastName: "سیستم" },
-    { email: "teacher@farhang.school", password: "Teacher@12345", role: Role.TEACHER, firstName: "محمد", lastName: "احمدی" },
+    { ...DEMO.admin, role: Role.ADMIN, firstName: "مدیر", lastName: "سیستم" },
+    { ...DEMO.teacher, role: Role.TEACHER, firstName: "محمد", lastName: "احمدی" },
   ];
 
   for (const u of demo) {
-    const exists = await prisma.user.findUnique({ where: { email: u.email } });
-    if (exists) {
-      log(false, `user ${u.email} already exists`);
-      continue;
-    }
-    const user = await prisma.user.create({
-      data: {
-        email: u.email,
-        passwordHash: await bcrypt.hash(u.password, 10),
-        role: u.role,
-        firstName: u.firstName,
-        lastName: u.lastName,
-      },
-    });
+    let user = await prisma.user.findUnique({ where: { phone: u.phone } });
 
-    // Link the demo teacher account to the public teacher "محمد احمدی".
+    if (user) {
+      log(false, `user ${u.phone} already exists`);
+    } else {
+      // A database created BEFORE the phone migration still has this demo user, but with phone = NULL
+      // (the e-mail column is gone). Give that same account its phone instead of creating a second one.
+      const legacy = await prisma.user.findFirst({
+        where: { role: u.role, phone: null, firstName: u.firstName, lastName: u.lastName },
+        orderBy: { id: "asc" },
+      });
+      if (legacy) {
+        user = await prisma.user.update({ where: { id: legacy.id }, data: { phone: u.phone } });
+        log(true, `user ${u.phone} (existing ${u.role} account upgraded: phone added, password unchanged)`);
+      } else {
+        user = await prisma.user.create({
+          data: {
+            phone: u.phone,
+            passwordHash: await bcrypt.hash(u.password, 10),
+            role: u.role,
+            firstName: u.firstName,
+            lastName: u.lastName,
+          },
+        });
+        log(true, `user ${u.phone} (${u.role})`);
+      }
+    }
+
+    // Link the demo teacher account to the public teacher "محمد احمدی" (only if not linked yet).
     if (u.role === Role.TEACHER) {
       await prisma.teacher.updateMany({
         where: { firstName: "محمد", lastName: "احمدی", userId: null },
         data: { userId: user.id },
       });
     }
-    log(true, `user ${u.email}`);
   }
 }
 

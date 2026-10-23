@@ -8,6 +8,11 @@
  * It never deletes anything. Two small test rows are left behind (see SETUP-API.md).
  */
 import "dotenv/config";
+import { DEMO, DEMO_ENTRY } from "../../prisma/demoAccounts";
+import { formatStudentCode } from "../utils/identifiers";
+
+// The first student of the demo class (created by the seed): 1405-6-001
+const DEMO_STUDENT_CODE = formatStudentCode(DEMO_ENTRY.year, DEMO_ENTRY.grade, 1);
 
 const BASE = `http://localhost:${process.env.PORT ?? 5000}/api/v1`;
 
@@ -142,21 +147,56 @@ async function main() {
   check("/auth/me without login gives 401", r.status === 401);
   r = await call("GET", "/enrollments");
   check("admin list without login gives 401", r.status === 401);
-  r = await call("POST", "/auth/login", { body: { email: "admin@farhang.school", password: "wrong-password" } });
+  r = await call("POST", "/auth/login", { body: { identifier: DEMO.admin.phone, password: "wrong-password" } });
   check("wrong password gives 401", r.status === 401);
+  r = await call("POST", "/auth/login", { body: { identifier: "admin@farhang.school", password: DEMO.admin.password } });
+  check("e-mail login is gone (400)", r.status === 400, `status ${r.status}`);
+  r = await call("POST", "/auth/login", { body: { identifier: "09000000000", password: "x" } });
+  check("unknown phone gives 401", r.status === 401, `status ${r.status}`);
 
-  r = await call("POST", "/auth/login", { body: { email: "teacher@farhang.school", password: "Teacher@12345" } });
-  check("teacher can log in", r.status === 200 && Boolean(r.cookie), `status ${r.status}`);
+  r = await call("POST", "/auth/login", { body: { identifier: DEMO.teacher.phone, password: DEMO.teacher.password } });
+  check("teacher can log in with phone", r.status === 200 && Boolean(r.cookie) && r.json?.data?.user?.role === "TEACHER", `status ${r.status}`);
   const teacherCookie = r.cookie;
   r = await call("GET", "/enrollments", { cookie: teacherCookie });
   check("teacher is blocked from admin data (403)", r.status === 403, `status ${r.status}`);
 
-  r = await call("POST", "/auth/login", { body: { email: "admin@farhang.school", password: "Admin@12345" } });
-  check("admin can log in", r.status === 200 && r.json?.data?.user?.role === "ADMIN", `status ${r.status}`);
+  r = await call("POST", "/auth/login", { body: { identifier: DEMO.admin.phone, password: DEMO.admin.password } });
+  check("admin can log in with phone", r.status === 200 && r.json?.data?.user?.role === "ADMIN", `status ${r.status}`);
   check("password hash is never returned", !JSON.stringify(r.json).includes("passwordHash"));
   const admin = r.cookie;
   r = await call("GET", "/auth/me", { cookie: admin });
-  check("/auth/me with admin cookie", r.status === 200 && r.json?.data?.user?.email === "admin@farhang.school");
+  check("/auth/me with admin cookie", r.status === 200 && r.json?.data?.user?.phone === DEMO.admin.phone && r.json?.data?.user?.email === undefined);
+
+  // Phone written differently (Persian digits, +98) still finds the same account.
+  r = await call("POST", "/auth/login", { body: { identifier: "+98 912 123 4567", password: DEMO.parent.password } });
+  check("parent can log in with phone (+98 form)", r.status === 200 && r.json?.data?.user?.role === "PARENT", `status ${r.status}`);
+  const parentCookie = r.cookie;
+  r = await call("GET", "/panel/parent/children", { cookie: parentCookie });
+  check("parent sees his children", r.status === 200 && Array.isArray(r.json?.data) && r.json.data.length >= 1, `status ${r.status}`);
+  r = await call("GET", "/panel/admin/stats", { cookie: parentCookie });
+  check("parent is blocked from the admin panel (403)", r.status === 403, `status ${r.status}`);
+
+  // Student: student code + password
+  r = await call("POST", "/auth/login", { body: { identifier: DEMO_STUDENT_CODE, password: "wrong-password" } });
+  check("student: wrong password gives 401", r.status === 401, `status ${r.status}`);
+  r = await call("POST", "/auth/login", { body: { identifier: DEMO_STUDENT_CODE, password: DEMO.student.password } });
+  check(
+    "student can log in with student code",
+    r.status === 200 && r.json?.data?.user?.role === "STUDENT" && r.json?.data?.user?.studentCode === DEMO_STUDENT_CODE && r.json?.data?.user?.phone === null,
+    `status ${r.status}`
+  );
+  const studentCookie = r.cookie;
+  r = await call("GET", "/panel/student/overview", { cookie: studentCookie });
+  check("student sees his own overview", r.status === 200 && Boolean(r.json?.data?.student?.firstName), `status ${r.status}`);
+  r = await call("GET", "/panel/teacher/classes", { cookie: studentCookie });
+  check("student is blocked from the teacher panel (403)", r.status === 403, `status ${r.status}`);
+  r = await call("GET", "/enrollments", { cookie: studentCookie });
+  check("student is blocked from admin data (403)", r.status === 403, `status ${r.status}`);
+  r = await call("POST", "/auth/login", { body: { identifier: "1405-9-001", password: DEMO.student.password } });
+  check("invalid student code format gives 400", r.status === 400, `status ${r.status}`);
+  r = await call("POST", "/auth/login", { body: { identifier: "1405-6-999", password: DEMO.student.password } });
+  check("unknown student code gives 401", r.status === 401, `status ${r.status}`);
+
   r = await call("GET", "/enrollments", { cookie: admin });
   check("admin sees enrollments", r.status === 200 && r.json?.meta?.total >= 1);
   r = await call("GET", "/contact", { cookie: admin });

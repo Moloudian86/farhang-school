@@ -10,7 +10,7 @@ export const AUTH_COOKIE = "farhang_token";
 
 export interface AuthUser {
   id: number;
-  email: string;
+  phone: string | null; // students have no phone (they log in with their student code)
   role: Role;
   firstName: string;
   lastName: string;
@@ -43,7 +43,7 @@ export const authenticate = asyncHandler(async (req: Request, _res: Response, ne
 
   req.user = {
     id: user.id,
-    email: user.email,
+    phone: user.phone,
     role: user.role,
     firstName: user.firstName,
     lastName: user.lastName,

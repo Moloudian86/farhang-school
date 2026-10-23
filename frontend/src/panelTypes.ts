@@ -1,6 +1,7 @@
 // Shapes of the data returned by /api/v1/panel/... and /api/v1/auth/...
 export type Role = "ADMIN" | "TEACHER" | "STUDENT" | "PARENT";
-export interface AuthUser { id: number; email: string; role: Role; firstName: string; lastName: string }
+/** phone: admin / teacher / parent login name. studentCode: student login name. The other one is null. */
+export interface AuthUser { id: number; phone: string | null; studentCode: string | null; role: Role; firstName: string; lastName: string }
 
 export type Weekday = "SATURDAY" | "SUNDAY" | "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY";
 export type AttendanceStatus = "PRESENT" | "ABSENT" | "LATE" | "EXCUSED";

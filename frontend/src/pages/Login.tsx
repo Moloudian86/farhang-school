@@ -7,12 +7,13 @@ import { FormError } from "../lib/api";
 import { ROLE_LABEL } from "../lib/labels";
 import { Role } from "../panelTypes";
 
-// Shown ONLY while developing (npm run dev). These accounts are created by the seed.
-const DEMO_ACCOUNTS: { role: Role; email: string; password: string }[] = [
-  { role: "ADMIN", email: "admin@farhang.school", password: "Admin@12345" },
-  { role: "TEACHER", email: "teacher@farhang.school", password: "Teacher@12345" },
-  { role: "STUDENT", email: "student@farhang.school", password: "Student@12345" },
-  { role: "PARENT", email: "parent@farhang.school", password: "Parent@12345" },
+// Shown ONLY while developing (npm run dev). These accounts are created by the seed (backend/prisma/demoAccounts.ts).
+// Admin / teacher / parent log in with a mobile number, the student with his student code.
+const DEMO_ACCOUNTS: { role: Role; identifier: string; password: string }[] = [
+  { role: "ADMIN", identifier: "09120000001", password: "Admin@12345" },
+  { role: "TEACHER", identifier: "09120000002", password: "Teacher@12345" },
+  { role: "STUDENT", identifier: "1405-6-001", password: "Student@12345" },
+  { role: "PARENT", identifier: "09121234567", password: "Parent@12345" },
 ];
 
 export default function Login() {
@@ -22,7 +23,7 @@ export default function Login() {
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from;
 
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,14 +33,14 @@ export default function Login() {
 
   async function onSubmit(ev: FormEvent) {
     ev.preventDefault();
-    if (!email.trim() || !password) return setError("ایمیل و رمز عبور را وارد کنید");
+    if (!identifier.trim() || !password) return setError("شمارهٔ موبایل یا کد دانش‌آموزی و رمز عبور را وارد کنید");
     setBusy(true);
     setError("");
     try {
-      const u = await login(email.trim(), password);
+      const u = await login(identifier.trim(), password);
       navigate(from ?? HOME_BY_ROLE[u.role], { replace: true });
     } catch (err) {
-      setError(err instanceof FormError ? err.message : "ورود انجام نشد");
+      setError(err instanceof FormError ? err.fields.identifier ?? err.message : "ورود انجام نشد");
     } finally {
       setBusy(false);
     }
@@ -48,11 +49,11 @@ export default function Login() {
   return (
     <section className="mx-auto max-w-md px-4 py-16">
       <h1 className="text-center text-3xl font-extrabold text-primary">ورود به حساب کاربری</h1>
-      <p className="mt-2 text-center text-sm text-ink/65">مدیر، معلم، دانش‌آموز و والدین از همین صفحه وارد می‌شوند.</p>
+      <p className="mt-2 text-center text-sm text-ink/65">مدیر، معلم و والدین با شمارهٔ موبایل و دانش‌آموزان با کد دانش‌آموزی وارد می‌شوند.</p>
 
       <form onSubmit={onSubmit} noValidate className="mt-8 space-y-5 rounded-3xl bg-white p-6 ring-1 ring-primary/10 md:p-8">
-        <FormField id="l-email" label="ایمیل" required>
-          <input id="l-email" type="email" dir="ltr" autoComplete="username" className={`${inputClass(!!error)} text-start`} value={email} onChange={(e) => setEmail(e.target.value)} />
+        <FormField id="l-id" label="شمارهٔ موبایل یا کد دانش‌آموزی" required>
+          <input id="l-id" type="text" dir="ltr" inputMode="text" autoComplete="username" placeholder="09121234567  یا  1405-1-001" className={`${inputClass(!!error)} text-start`} value={identifier} onChange={(e) => setIdentifier(e.target.value)} />
         </FormField>
         <FormField id="l-pass" label="رمز عبور" required>
           <input id="l-pass" type="password" dir="ltr" autoComplete="current-password" className={`${inputClass(!!error)} text-start`} value={password} onChange={(e) => setPassword(e.target.value)} />
@@ -71,8 +72,8 @@ export default function Login() {
           <ul className="mt-2 space-y-1">
             {DEMO_ACCOUNTS.map((a) => (
               <li key={a.role}>
-                <button type="button" onClick={() => { setEmail(a.email); setPassword(a.password); setError(""); }} className="text-start hover:text-primary">
-                  <span className="font-bold">{ROLE_LABEL[a.role]}:</span> <span dir="ltr" className="text-ink/70">{a.email}</span>
+                <button type="button" onClick={() => { setIdentifier(a.identifier); setPassword(a.password); setError(""); }} className="text-start hover:text-primary">
+                  <span className="font-bold">{ROLE_LABEL[a.role]}:</span> <span dir="ltr" className="text-ink/70">{a.identifier}</span>
                 </button>
               </li>
             ))}

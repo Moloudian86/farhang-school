@@ -17,8 +17,8 @@ authRouter.post(
   "/login",
   loginLimiter,
   asyncHandler(async (req, res) => {
-    const { email, password } = loginSchema.parse(req.body);
-    const { token, user } = await service.login(email, password);
+    const { identifier, password } = loginSchema.parse(req.body);
+    const { token, user } = await service.login(identifier, password);
     const exp = (jwt.decode(token) as JwtPayload).exp as number;
     res.cookie(AUTH_COOKIE, token, { ...cookieBase, maxAge: exp * 1000 - Date.now() });
     sendSuccess(res, { user }, { message: "با موفقیت وارد شدید" });

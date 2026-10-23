@@ -1,11 +1,8 @@
 import { z } from "zod";
+import { normalizeDigits, normalizeMobile } from "./identifiers";
 
-/** Turns Persian (۱۲۳) and Arabic (١٢٣) digits into English digits (123). */
-export function normalizeDigits(value: string): string {
-  return value
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660));
-}
+// Same function as before, now living in identifiers.ts (pure code, shared with the seed).
+export { normalizeDigits };
 
 /** Official Iranian national code (کد ملی) check. */
 export function isValidNationalCode(code: string): boolean {
@@ -25,6 +22,22 @@ export const nationalCodeSchema = withDigits(z.string().refine(isValidNationalCo
 export const phoneSchema = withDigits(
   z.string().regex(/^0\d{10}$/, "شمارهٔ تلفن باید ۱۱ رقم باشد و با صفر شروع شود (مثل 09121234567)")
 );
+
+/**
+ * Mobile number used as a LOGIN name (ADMIN / TEACHER / PARENT). Stricter than phoneSchema:
+ * only 09xxxxxxxxx is accepted, but common spellings (+98, spaces, Persian digits) are cleaned to that form.
+ */
+export const mobileSchema = z
+  .string()
+  .trim()
+  .transform((v, ctx) => {
+    const mobile = normalizeMobile(v);
+    if (!mobile) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "شمارهٔ موبایل نامعتبر است (مثل 09121234567)" });
+      return z.NEVER;
+    }
+    return mobile;
+  });
 
 // Shared little schemas
 export const idParam = z.object({ id: z.coerce.number().int().positive() });

@@ -7,7 +7,8 @@ interface AuthState {
   user: AuthUser | null;
   /** true only while we are asking the server "who is logged in?" the first time */
   loading: boolean;
-  login: (email: string, password: string) => Promise<AuthUser>;
+  /** identifier = mobile number (admin / teacher / parent) or student code (student); the server decides which. */
+  login: (identifier: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
 }
 
@@ -44,8 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
   }, [queryClient]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const { data } = await apiSend<{ user: AuthUser }>("POST", "/auth/login", { email, password });
+  const login = useCallback(async (identifier: string, password: string) => {
+    const { data } = await apiSend<{ user: AuthUser }>("POST", "/auth/login", { identifier, password });
     queryClient.clear(); // never show the previous person's cached data
     setUser(data.user);
     return data.user;
